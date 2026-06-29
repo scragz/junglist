@@ -1,10 +1,15 @@
 // One master-analyser visualiser (spec §5.9, §7). A single canvas in the header
 // animates the live output while anything is playing.
 
-export function startWaveform(analyser: AnalyserNode, canvas: HTMLCanvasElement): void {
+export function startWaveform(
+  analyser: AnalyserNode,
+  canvas: HTMLCanvasElement,
+): () => void {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return;
+  if (!ctx) return () => undefined;
   const data = new Uint8Array(analyser.fftSize);
+  let frame = 0;
+  let active = true;
 
   const resize = () => {
     const dpr = window.devicePixelRatio || 1;
@@ -16,7 +21,8 @@ export function startWaveform(analyser: AnalyserNode, canvas: HTMLCanvasElement)
   window.addEventListener("resize", resize);
 
   const draw = () => {
-    requestAnimationFrame(draw);
+    if (!active) return;
+    frame = requestAnimationFrame(draw);
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     analyser.getByteTimeDomainData(data);
@@ -34,4 +40,10 @@ export function startWaveform(analyser: AnalyserNode, canvas: HTMLCanvasElement)
     ctx.stroke();
   };
   draw();
+
+  return () => {
+    active = false;
+    cancelAnimationFrame(frame);
+    window.removeEventListener("resize", resize);
+  };
 }

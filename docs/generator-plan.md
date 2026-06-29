@@ -27,6 +27,63 @@ Three consequences fall out of this:
 
 ---
 
+## 0.5 Course-correction: groove-first (the constructs are spices, not the dish)
+
+**Symptom:** an arc built only from constructs sounds like frantic jazz drums — all
+density, no pocket, never lands a groove.
+
+**Diagnosis:** nearly every ZoC construct is a **destabilizer** — a mechanism for
+exceeding the listener's tracking threshold (Structural Aliasing, Temporal Foreclosure,
+Stochastic Caesura, Percussive Opacity, Pressure Pulse, Subdivided Relentlessness…). The
+original §0 bet — "an arc is a sequence of constructs" — therefore composes an arc
+entirely out of figure with no ground. Groove is a **figure/ground relation**: a stable,
+funky backbone (the Amen's inherent Stubblefield/Coleman pocket — kick on 1, snare on 2
+and 4, swung ghost-hats) under the chopped chaos. The docs only ever described the
+figures. We never built the ground. `breaks.md` even names the two groove principles —
+**Variant Economy** (groove from minimal edit) and **Phrase Gravity** (the pull toward
+the 1) — and *discards* both as "technique, not structure." For a groove engine that's
+exactly backwards: those two are the engine.
+
+**Two mechanical compounders:**
+- Role-based random slice selection erases the **kick-snare skeleton** the ear locks to.
+- F-6's "timing offsets" as corpse-*jitter* ≠ groove. Groove is **consistent**
+  displacement (laid-back snare, pushed hats) applied uniformly — a pocket, not noise.
+
+**The reframe (supersedes §0 consequence 3):** the default state of an arc is a
+**groove substrate**, not a construct. Constructs are demoted to **operators that deviate
+from the pocket and resolve back to it.**
+
+| | Old plan | Corrected |
+|---|---|---|
+| Default content | a construct | the **pocket** (mostly-intact swung Amen) |
+| Constructs are | the material | **departures** from the pocket, then release |
+| Skeleton | randomized by role | **protected**; violated only deliberately |
+| Timing | corpse-jitter | a **groove template** (consistent swing/pocket) + small jitter |
+| Tension curve | peaks only → frantic | **troughs (grounded) ↔ peaks (chaos)** — contrast is the point |
+
+### The groove substrate (the new ground layer)
+
+A first-class layer every arc rides on, before any construct touches it:
+
+1. **Canonical Amen backbone** — the actual recognizable sequence (the famous bar), kept
+   mostly intact, with the kick/snare skeleton on protected steps. This is what makes it
+   *jungle* and not a fill.
+2. **Groove template** — a consistent micro-timing + accent pocket (swing on the
+   off-16ths, laid-back snare), applied uniformly so it feels played, not jittered.
+3. **Two groove generators promoted from the discard pile:**
+   - **Variant Economy** — produce the next bar by *minimal edit* of the current one
+     (flip one snare, add one 16th, drop one kick), never wholesale replacement. This is
+     the actual groove-evolution motor.
+   - **Phrase Gravity** — accumulate expectation across the bar/4-bar cycle and discharge
+     it on the 1. Gives the arc a pulse to breathe against.
+
+Constructs (§4) now run **on top of** this: a section is "pocket + this construct's
+deviation, for N bars." High-intensity arc positions let the construct overrun the
+pocket; low-intensity positions let the pocket play nearly clean. That oscillation is the
+groove.
+
+---
+
 ## 1. What we reuse (most of it)
 
 The existing engine already does the hard real-time work. The key realization:
@@ -61,9 +118,11 @@ src/
   gen/
     roles.ts          # slice-role vocabulary (parsed/derived from amen-samples.md)
     rng.ts            # seeded PRNG (mulberry32 / xoshiro) — reproducible arcs
+    groove.ts         # the substrate: canonical Amen backbone + swing/pocket template
+                      #   + Variant Economy + Phrase Gravity (§0.5). The DEFAULT layer.
     generator.ts      # Generator interface + registry
-    constructs/*.ts   # one file per construct generator
-    composer.ts       # arc = sequence of sections over a tension curve
+    constructs/*.ts   # one file per construct — deviation operators over the pocket
+    composer.ts       # arc = pocket + a sequence of deviations over a tension curve
   midi/
     smf.ts            # Standard MIDI File encoder (drums + sub tracks)
     export.ts         # Pattern → SMF bytes → Blob download
@@ -110,7 +169,13 @@ faster and good enough; (b) is more honest and scales if slices change again.
 Not all constructs are the same *kind* of thing. Sorting them is the central design
 move — it determines what the composer does with each one.
 
-### Tier A — Section generators (emit a self-contained block of bars)
+**Post-§0.5 framing:** these are no longer content sources. Each takes the **groove
+substrate** (the pocket for this section) as input and **deviates from it**, returning a
+new lane. A construct at intensity 0 should leave the pocket nearly untouched; at
+intensity 1 it overruns it. "Generate a section" = "apply this deviation to the pocket
+for N bars." The pocket is always there underneath.
+
+### Tier A — Section operators (deviate the pocket across a block of bars)
 
 | Construct | Rule | Guardrail (its collapse condition → clamp) |
 |---|---|---|
@@ -168,7 +233,9 @@ interface GenContext {
   roles: RoleMap;
   bpm: number;           // 170
   bars: number;          // how long this section runs
-  intensity: number;     // 0..1 — the arc's tension at this position
+  intensity: number;     // 0..1 — the arc's tension; 0 ⇒ leave the pocket ~clean
+  pocket: SliceLane;     // the groove substrate for this section (§0.5) — the INPUT
+  groove: GrooveTemplate;// swing/accent pocket, so deviations stay in the feel
   corpse?: MarkovBias;   // Tier-C ordering pressure (optional)
 }
 
@@ -178,6 +245,7 @@ interface Generator {
   style: string;                 // for the L/A/G badge + grouping
   naturalBars: [min, max];       // its comfortable length range
   tensionRange: [min, max];      // where on the arc curve it belongs
+  /** deviate the pocket and return the new lane — NOT generate from scratch (§0.5). */
   generate(ctx: GenContext): SliceLane[];   // slice lanes only — no sub (F-5)
 }
 ```
@@ -191,14 +259,22 @@ Metrical Ghost's "collapses when density too high/low" becomes
 
 ## 6. The arc composer (`composer.ts`)
 
-An arc is a **tension curve sampled into sections**:
+An arc is a **groove substrate with a tension curve of deviations over it**:
 
-1. Pick a curve archetype (seeded): e.g. `sparse-build-peak-drop-refuse`,
-   `front-loaded`, `two-rises`, `flatline-pressure`. ~4–6 archetypes to start.
-2. Walk the curve. At each position, read the local tension, filter Tier-A generators
-   whose `tensionRange` contains it, pick one (weighted by the palette toggles).
-3. Assign that section a length from the generator's `naturalBars`, jittered — this is
-   where **variable section lengths** come from, per your ask.
+0. **Lay the pocket (§0.5).** Build the groove substrate for the whole arc first —
+   canonical Amen backbone + swing/accent template + a Variant-Economy bar-to-bar
+   evolution. This is the default state; if every construct did nothing, the arc would
+   still groove.
+1. Pick a curve archetype (seeded): e.g. `pocket-build-peak-drop-refuse`,
+   `front-loaded`, `two-rises`, `pocket-with-stabs`. **The curve must visit its floor** —
+   sections at low tension play the pocket nearly clean; that's the groove the chaos
+   contrasts against. A curve with no troughs is the frantic bug.
+2. Walk the curve. At each position, read the local tension; at the **floor** keep the
+   pocket (optionally Variant Economy / Phrase Gravity only); above it, pick a Tier-A
+   **deviation** whose `tensionRange` contains the tension (weighted by palette toggles)
+   and apply it to that section's pocket at that intensity.
+3. Assign that section a length from the operator's `naturalBars`, jittered — variable
+   section lengths, per your ask.
 4. At each boundary, maybe insert a Tier-B operator (Stochastic Caesura on a big drop,
    Structural Absence on a re-entry, Phrase Debt threading a quoted snare across).
 5. Apply Tier-C biases globally (Corpse Meter ordering, optional choke overlay).
@@ -342,8 +418,10 @@ A purposeful loop — directed search ending in a download — not a slot machin
   plays the reference JSONs) but nothing generates into it; and sub-anchored construct
   mechanisms get re-expressed drum-only — your Ableton bass supplies the anchor. No
   construct is *purely* sub, so none are cut wholesale; see the §4 audit note.
-- **F-6 Micro-timing → preserve offsets.** Export emits non-quantized onsets with small
-  timing offsets (this is where Corpse Meter survives into the MIDI). Pairs with F-4.
+- **F-6 Micro-timing → groove template + small jitter.** Onsets are non-quantized, but
+  the dominant offset is the **consistent groove pocket** (§0.5), not corpse-jitter;
+  Corpse Meter adds a small amount on top. Consistent displacement = feel; pure random =
+  the frantic bug.
 - **F-7 Spec debt → fix.** Write `docs/sequencer-spec.md` documenting the existing engine
   so the `§` citations resolve. Low priority, but it's worth having.
 - **F-8 Interface → arc/timeline.** Sections in time, tension curve drawn through. The
@@ -356,15 +434,19 @@ A purposeful loop — directed search ending in a download — not a slot machin
 ## 10. Suggested build phases
 
 1. **Foundation:** `rng.ts`, hand-curated `roles.ts`, hand-rolled `smf.ts` + `export.ts`
-   (single drum track, timing offsets), and a trivial one-section "arc" → prove the whole
-   pipe end-to-end (roll → play → export → Ableton).
-2. **Tier A:** implement the 8 section generators (drums only) against the existing JSONs
-   as fixtures; re-express Metrical Ghost + Gravitational Liminality without sub.
-3. **Composer:** tension curves + section sequencing + variable lengths.
-4. **Tier B + C:** arc operators, Corpse Meter (hand-tagged successors) + choke biases.
-5. **UI:** transport + arc timeline + tension curve + A/B/C slots + lineage rail +
+   (single drum track, timing offsets), and a trivial one-bar export → prove the pipe
+   end-to-end (play → export → Ableton).
+2. **Groove substrate (§0.5) — do this before any construct.** `groove.ts`: canonical
+   Amen backbone + swing/accent template + Variant Economy + Phrase Gravity. Ship an arc
+   that is *pocket only* and verify it grooves at 170 with zero constructs. This is the
+   anti-frantic gate — if the bare pocket doesn't nod, nothing downstream will.
+3. **Tier A deviations:** the 8 operators, each transforming the pocket (not generating
+   from scratch); re-express Metrical Ghost + Gravitational Liminality without sub.
+4. **Composer:** tension curves *that visit the floor* + sequencing + variable lengths.
+5. **Tier B + C:** arc operators, Corpse Meter (hand-tagged successors) + choke biases.
+6. **UI:** transport + arc timeline + tension curve + A/B/C slots + lineage rail +
    roll/lock/mutate + inspector swap + MIDI export. The whole instrument.
-6. **Polish:** L/A/G honesty per generator, `docs/sequencer-spec.md` (F-7), tidy the
+7. **Polish:** L/A/G honesty per generator, `docs/sequencer-spec.md` (F-7), tidy the
    stale "16" comments.
 ```
 

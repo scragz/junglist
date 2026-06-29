@@ -201,10 +201,11 @@ export class PatternPlayer {
   private scheduleSlice(cell: SliceCellObject, time: number, laneIdx: number): void {
     if ((cell.prob ?? 1) < 1 && Math.random() >= (cell.prob ?? 1)) return;
 
+    const timing = cell.timing ?? 0;
     const ratchet = Math.max(1, Math.round(cell.ratchet ?? 1));
     const sub = this.stepDur / ratchet;
     for (let r = 0; r < ratchet; r++) {
-      this.triggerSlice(cell, time + r * sub, laneIdx);
+      this.triggerSlice(cell, time + timing + r * sub, laneIdx);
     }
   }
 

@@ -5,7 +5,7 @@ export type Lands = "L" | "A" | "G";
 
 /** A slice-lane cell with modifiers (spec §3.3). */
 export interface SliceCellObject {
-  /** 1–16 — which Amen slice. Required for slice lanes. */
+  /** 1–44 — which Amen slice. Required for slice lanes. */
   slice: number;
   /** 0..1 linear gain, default 1. */
   gain?: number;
@@ -15,6 +15,8 @@ export interface SliceCellObject {
   reverse?: boolean;
   /** seconds into the slice to start (0..~0.218). Default 0. */
   offset?: number;
+  /** seconds before/after the grid onset. Used by generated arcs and MIDI export. */
+  timing?: number;
   /** seconds to hold before fade-out; null = full slice. The stutter/chop control. */
   gate?: number | null;
   /** -1..1 stereo pan. Default 0. */

@@ -1,4 +1,4 @@
-// BufferPool — fetch + decode the 16 Amen WAVs once and share them across every
+// BufferPool — fetch + decode the 44 Amen WAVs once and share them across every
 // player. Also precomputes a reversed copy of each buffer (spec §5.6: negative
 // playbackRate is unreliable, so reverse reads from a parallel pool).
 
@@ -44,7 +44,7 @@ export class BufferPool {
     return this.loading;
   }
 
-  /** Get slice 1–16 (1-indexed), forward or reversed. */
+  /** Get slice 1–44 (1-indexed), forward or reversed. */
   get(slice: number, reverse = false): AudioBuffer {
     const idx = Math.max(1, Math.min(this.forward.length, Math.round(slice))) - 1;
     const buf = (reverse ? this.reversed : this.forward)[idx];
